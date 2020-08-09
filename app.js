@@ -66,12 +66,10 @@ const credentials = {
     private_key: config.GOOGLE_PRIVATE_KEY,
 };
 
-const sessionClient = new dialogflow.SessionsClient(
-    {
-        projectId: config.GOOGLE_PROJECT_ID,
-        credentials
-    }
-);
+const sessionClient = new dialogflow.SessionsClient({
+    projectId: config.GOOGLE_PROJECT_ID,
+    credentials
+});
 
 
 const sessionIds = new Map();
@@ -184,7 +182,7 @@ function receivedMessage(event) {
 }
 
 
-function handleMessageAttachments(messageAttachments, senderID){
+function handleMessageAttachments(messageAttachments, senderID) {
     //for now just reply
     sendTextMessage(senderID, "Attachment received. Thank you.");
 }
@@ -211,22 +209,21 @@ function handleDialogFlowAction(sender, action, messages, contexts, parameters) 
             sendTypingOn(sender);
 
             //ask what user wants to do next
-            setTimeout(function() {
-                let buttons = [
-                    {
-                        type:"web_url",
-                        url:"https://www.salaichitoolatt.name",
-                        title:"Track my order"
+            setTimeout(function () {
+                let buttons = [{
+                        type: "web_url",
+                        url: "https://www.salaichitoolatt.name",
+                        title: "Track my order"
                     },
                     {
-                        type:"phone_number",
-                        title:"Call us",
-                        payload:"+959252678817",
+                        type: "phone_number",
+                        title: "Call us",
+                        payload: "+959252678817",
                     },
                     {
-                        type:"postback",
-                        title:"Keep on Chatting",
-                        payload:"CHAT"
+                        type: "postback",
+                        title: "Keep on Chatting",
+                        payload: "CHAT"
                     }
                 ];
 
@@ -238,7 +235,7 @@ function handleDialogFlowAction(sender, action, messages, contexts, parameters) 
             handleMessages(messages, sender);
 
     }
-    
+
 }
 
 function handleMessage(message, sender) {
@@ -253,12 +250,11 @@ function handleMessage(message, sender) {
         case "quickReplies": //quick replies
             let replies = [];
             message.quickReplies.quickReplies.forEach((text) => {
-                let reply =
-                    {
-                        "content_type": "text",
-                        "title": text,
-                        "payload": text
-                    }
+                let reply = {
+                    "content_type": "text",
+                    "title": text,
+                    "payload": text
+                }
                 replies.push(reply);
             });
             sendQuickReply(sender, message.quickReplies.title, replies);
@@ -298,7 +294,7 @@ function handleCardMessages(messages, sender) {
 
         let element = {
             "title": message.card.title,
-            "image_url":message.card.imageUri,
+            "image_url": message.card.imageUri,
             "subtitle": message.card.subtitle,
             "buttons": buttons
         };
@@ -310,25 +306,25 @@ function handleCardMessages(messages, sender) {
 
 function handleMessages(messages, sender) {
     let timeoutInterval = 1100;
-    let previousType ;
+    let previousType;
     let cardTypes = [];
     let timeout = 0;
     for (var i = 0; i < messages.length; i++) {
 
-        if ( previousType == "card" && (messages[i].message != "card" || i == messages.length - 1)) {
+        if (previousType == "card" && (messages[i].message != "card" || i == messages.length - 1)) {
             timeout = (i - 1) * timeoutInterval;
             setTimeout(handleCardMessages.bind(null, cardTypes, sender), timeout);
             cardTypes = [];
             timeout = i * timeoutInterval;
             setTimeout(handleMessage.bind(null, messages[i], sender), timeout);
-        } else if ( messages[i].message == "card" && i == messages.length - 1) {
+        } else if (messages[i].message == "card" && i == messages.length - 1) {
             cardTypes.push(messages[i]);
             timeout = (i - 1) * timeoutInterval;
             setTimeout(handleCardMessages.bind(null, cardTypes, sender), timeout);
             cardTypes = [];
-        } else if ( messages[i].message == "card") {
+        } else if (messages[i].message == "card") {
             cardTypes.push(messages[i]);
-        } else  {
+        } else {
 
             timeout = i * timeoutInterval;
             setTimeout(handleMessage.bind(null, messages[i], sender), timeout);
@@ -569,7 +565,7 @@ function sendGenericMessage(recipientId, elements) {
 
 
 function sendReceiptMessage(recipientId, recipient_name, currency, payment_method,
-                            timestamp, elements, address, summary, adjustments) {
+    timestamp, elements, address, summary, adjustments) {
     // Generate a random receipt ID as the API requires a unique ID
     var receiptId = "order" + Math.floor(Math.random() * 1000);
 
@@ -610,7 +606,7 @@ function sendQuickReply(recipientId, text, replies, metadata) {
         },
         message: {
             text: text,
-            metadata: isDefined(metadata)?metadata:'',
+            metadata: isDefined(metadata) ? metadata : '',
             quick_replies: replies
         }
     };
@@ -695,6 +691,36 @@ function sendAccountLinking(recipientId) {
     callSendAPI(messageData);
 }
 
+function greetUserText(userId) {
+    //first read user firstname
+    request({
+        uri: 'https://graph.facebook.com/v3.2/' + userId,
+        qs: {
+            access_token: config.FB_PAGE_TOKEN
+        }
+
+    }, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+
+            var user = JSON.parse(body);
+            console.log('getUserData: ' + user);
+            if (user.first_name) {
+                console.log("FB user: %s %s, %s",
+                    user.first_name, user.last_name, user.profile_pic);
+
+                sendTextMessage(userId, "Welcome " + user.first_name + '! ' +
+                    'I can answer frequently asked questions for you ' +
+                    'and I perform job interviews. What can I help you with?');
+            } else {
+                console.log("Cannot get data for fb user with id",
+                    userId);
+            }
+        } else {
+            console.error(response.error);
+        }
+
+    });
+}
 /*
  * Call the Send API. The message data goes in the body. If successful, we'll
  * get the message id in a response
@@ -746,9 +772,12 @@ function receivedPostback(event) {
     var payload = event.postback.payload;
 
     switch (payload) {
+        case 'GET_STARTED':
+            greetUserText(senderID);
+            break;
         case 'JOB_APPLY':
             //get feedback with new jobs
-			sendToDialogFlow(senderID, 'job openings');
+            sendToDialogFlow(senderID, 'job openings');
             break;
         case 'CHAT':
             //user wants to chat
