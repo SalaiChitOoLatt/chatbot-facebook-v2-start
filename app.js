@@ -37,7 +37,6 @@ if (!config.SERVER_URL) { //used for ink to static files
 }
 
 
-
 app.set('port', (process.env.PORT || 5000))
 
 //verify request came from facebook
@@ -100,8 +99,6 @@ app.get('/webhook/', function (req, res) {
 app.post('/webhook/', function (req, res) {
     var data = req.body;
     console.log(JSON.stringify(data));
-
-
 
     // Make sure this is a page subscription
     if (data.object == 'page') {
@@ -203,7 +200,6 @@ function handleEcho(messageId, appId, metadata) {
 function handleDialogFlowAction(sender, action, messages, contexts, parameters) {
     switch (action) {
         case "faq-delivery":
-
             handleMessages(messages, sender);
 
             sendTypingOn(sender);
@@ -213,7 +209,7 @@ function handleDialogFlowAction(sender, action, messages, contexts, parameters) 
                 let buttons = [{
                         type: "web_url",
                         url: "https://www.salaichitoolatt.name",
-                        title: "Track my order"
+                        title: "Go to website"
                     },
                     {
                         type: "phone_number",
@@ -229,13 +225,65 @@ function handleDialogFlowAction(sender, action, messages, contexts, parameters) 
 
                 sendButtonMessage(sender, "What would you like to do next?", buttons);
             }, 3000)
+
+            break;
+        case "detailed-application":
+            let filteredContexts = contexts.filter(function (el) {
+                return el.name.includes('job_application') ||
+                    el.name.includes('job-application-details_dialog_context')
+            });
+            if (filteredContexts.length > 0 && contexts[0].parameters) {
+                let phone_number = (isDefined(contexts[0].parameters.fields['phone-number']) &&
+                    contexts[0].parameters.fields['phone-number'] != '') ? contexts[0].parameters.fields['phone-number'].stringValue : '';
+                let user_name = (isDefined(contexts[0].parameters.fields['user-name']) &&
+                    contexts[0].parameters.fields['user-name'] != '') ? contexts[0].parameters.fields['user-name'].stringValue : '';
+                let previous_job = (isDefined(contexts[0].parameters.fields['previous-job']) &&
+                    contexts[0].parameters.fields['previous-job'] != '') ? contexts[0].parameters.fields['previous-job'].stringValue : '';
+                let years_of_experience = (isDefined(contexts[0].parameters.fields['years-of-experience']) &&
+                    contexts[0].parameters.fields['years-of-experience'] != '') ? contexts[0].parameters.fields['years-of-experience'].stringValue : '';
+                let job_vacancy = (isDefined(contexts[0].parameters.fields['job-vacancy']) &&
+                    contexts[0].parameters.fields['job-vacancy'] != '') ? contexts[0].parameters.fields['job-vacancy'].stringValue : '';
+
+
+                if (phone_number == '' && user_name != '' && previous_job != '' && years_of_experience == '') {
+
+                    let replies = [{
+                            "content_type": "text",
+                            "title": "Less than 1 year",
+                            "payload": "Less than 1 year"
+                        },
+                        {
+                            "content_type": "text",
+                            "title": "Less than 10 years",
+                            "payload": "Less than 10 years"
+                        },
+                        {
+                            "content_type": "text",
+                            "title": "More than 10 years",
+                            "payload": "More than 10 years"
+                        }
+                    ];
+                    sendQuickReply(sender, messages[0].text.text[0], replies);
+                } else if (phone_number != '' && user_name != '' && previous_job != '' && years_of_experience != '' &&
+                    job_vacancy != '') {
+
+                    let emailContent = 'A new job enquiery from ' + user_name + ' for the job: ' + job_vacancy +
+                        '.<br> Previous job position: ' + previous_job + '.' +
+                        '.<br> Years of experience: ' + years_of_experience + '.' +
+                        '.<br> Phone number: ' + phone_number + '.';
+
+                    sendEmail('New job application', emailContent);
+
+                    handleMessages(messages, sender);
+                } else {
+                    handleMessages(messages, sender);
+                }
+            }
             break;
         default:
             //unhandled action, just send back the text
             handleMessages(messages, sender);
-
     }
-
 }
 
 function handleMessage(message, sender) {
@@ -691,6 +739,7 @@ function sendAccountLinking(recipientId) {
     callSendAPI(messageData);
 }
 
+
 function greetUserText(userId) {
     //first read user firstname
     request({
@@ -721,9 +770,10 @@ function greetUserText(userId) {
 
     });
 }
+
 /*
- * Call the Send API. The message data goes in the body. If successful, we'll
- * get the message id in a response
+ * Call the Send API. The message data goes in the body. If successful, we'll 
+ * get the message id in a response 
  *
  */
 function callSendAPI(messageData) {
@@ -767,8 +817,8 @@ function receivedPostback(event) {
     var recipientID = event.recipient.id;
     var timeOfPostback = event.timestamp;
 
-    // The 'payload' param is a developer-defined field which is set in a postback
-    // button for Structured Messages.
+    // The 'payload' param is a developer-defined field which is set in a postback 
+    // button for Structured Messages. 
     var payload = event.postback.payload;
 
     switch (payload) {
@@ -793,6 +843,36 @@ function receivedPostback(event) {
     console.log("Received postback for user %d and page %d with payload '%s' " +
         "at %d", senderID, recipientID, payload, timeOfPostback);
 
+}
+
+
+function greetUserText(userId) {
+    //first read user firstname
+    request({
+        uri: 'https://graph.facebook.com/v2.7/' + userId,
+        qs: {
+            access_token: config.FB_PAGE_TOKEN
+        }
+
+    }, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+
+            var user = JSON.parse(body);
+
+            if (user.first_name) {
+                console.log("FB user: %s %s, %s",
+                    user.first_name, user.last_name, user.gender);
+
+                sendTextMessage(userId, "Welcome " + user.first_name + '!');
+            } else {
+                console.log("Cannot get data for fb user with id",
+                    userId);
+            }
+        } else {
+            console.error(response.error);
+        }
+
+    });
 }
 
 
@@ -873,9 +953,9 @@ function receivedAuthentication(event) {
     var timeOfAuth = event.timestamp;
 
     // The 'ref' field is set in the 'Send to Messenger' plugin, in the 'data-ref'
-    // The developer can set this to an arbitrary value to associate the
+    // The developer can set this to an arbitrary value to associate the 
     // authentication callback with the 'Send to Messenger' click event. This is
-    // a way to do account linking when the user clicks the 'Send to Messenger'
+    // a way to do account linking when the user clicks the 'Send to Messenger' 
     // plugin.
     var passThroughParam = event.optin.ref;
 
