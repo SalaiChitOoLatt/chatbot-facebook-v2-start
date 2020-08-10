@@ -752,10 +752,29 @@ function sendAccountLinking(recipientId) {
     callSendAPI(messageData);
 }
 
-function greetUserText(userId) {
+async function resolveAfterXSeconds(x) {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve(x);
+        }, x * 1000);
+    });
+}
 
+async function greetUserText(userId) {
     let user = usersMap.get(userId);
-    sendTextMessage(userId, "Welcome " + user.first_name + '! ' + 'I can answer frequently asked questions for you ' + 'and I perform job interviews. What can I help you with?');
+    if (!user) {
+        await resolveAfterXSeconds(2);
+        user = usersMap.get(userId);
+    }
+    if (user) {
+        sendTextMessage(userId, "Welcome " + user.first_name + '! ' +
+            'I can answer frequently asked questions for you ' +
+            'and I perform job interviews. What can I help you with?');
+    } else {
+        sendTextMessage(userId, 'Welcome! ' +
+            'I can answer frequently asked questions for you ' +
+            'and I perform job interviews. What can I help you with?');
+    }
 }
 
 /*
