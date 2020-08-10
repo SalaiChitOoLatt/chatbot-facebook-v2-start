@@ -6,9 +6,11 @@ const express = require('express');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
 const request = require('request');
+const pg = require('pg');
 const app = express();
 const uuid = require('uuid');
 
+pg.defaults.ssl = false;
 
 // Messenger API parameters
 if (!config.FB_PAGE_TOKEN) {
@@ -36,8 +38,12 @@ if (!config.SERVER_URL) { //used for ink to static files
     throw new Error('missing SERVER_URL');
 }
 
+if (!config.PG_CONFIG) { //postgresql config object
+    throw new Error('missing PG_CONFIG');
+}
 
-app.set('port', (process.env.PORT || 5000))
+
+app.set('port', (process.env.PORT || 5000));
 
 //verify request came from facebook
 app.use(bodyParser.json({
@@ -54,10 +60,6 @@ app.use(bodyParser.urlencoded({
 
 // Process application/json
 app.use(bodyParser.json());
-
-
-
-
 
 
 const credentials = {
@@ -754,9 +756,41 @@ function greetUserText(userId) {
             var user = JSON.parse(body);
             console.log('getUserData: ' + user);
             if (user.first_name) {
+                var pool = new pg.Pool(config.PG_CONFIG);
+                pool.connect(function (err, client, done) {
+                    if (err) {
+                        return console.error('Error acquiring client', err.stack);
+                    }
+                    var rows = [];
+                    console.log('fetching user');
+                    client.query(`SELECT id FROM users WHERE fb_id='${userId}' LIMIT 1`,
+                        function (err, result) {
+                            console.log('query result ' + result);
+                            if (err) {
+                                console.log('Query error: ' + err);
+                            } else {
+                                console.log('rows: ' + result.rows.length);
+                                if (result.rows.length === 0) {
+                                    let sql = 'INSERT INTO users (fb_id, first_name, last_name, profile_pic, ' +
+                                        'locale, timezone, gender) VALUES ($1, $2, $3, $4, $5, $6, $7)';
+                                    console.log('sql: ' + sql);
+                                    client.query(sql,
+                                        [
+                                            userId,
+                                            user.first_name,
+                                            user.last_name,
+                                            user.profile_pic,
+                                            user.locale,
+                                            user.timezone,
+                                            user.gender
+                                        ]);
+                                }
+                            }
+                        });
+                });
+                pool.end();
                 console.log("FB user: %s %s, %s",
                     user.first_name, user.last_name, user.profile_pic);
-
                 sendTextMessage(userId, "Welcome " + user.first_name + '! ' +
                     'I can answer frequently asked questions for you ' +
                     'and I perform job interviews. What can I help you with?');
