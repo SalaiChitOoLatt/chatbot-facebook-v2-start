@@ -14,6 +14,6 @@ module.exports = {
         host: process.env.PG_CONFIG_HOST,
         port: 5432,
         max: 10,
-        idleTimeoutMillis: 30000,
+        idleTimeoutMillis: 30000
     }
 };
